@@ -42,7 +42,7 @@ th{background:#fafafa}
         <option value="unit">unit</option>
         <option value="kg">kg</option>
         <option value="ikat">ikat</option>
-        <option value="kantong">kantong</option>
+        <option value="kantong" selected>kantong</option>
       </select>
     </div>
     <div>
@@ -137,7 +137,6 @@ let state = JSON.parse(localStorage.getItem("STATE_V3") || `{
 }`);
 
 function saveState(){localStorage.setItem("STATE_V3", JSON.stringify(state));}
-
 function rnd(){return Math.random().toString(36).slice(2);}
 
 function openModal(){modalBg.style.display="flex";}
@@ -161,23 +160,15 @@ function saveItem(){
 
   if(!name){alert("Nama wajib.");return;}
 
-  if(editing){
-    let it = state.items.find(x=>x.id==editing);
-    it.name=name;
-    it.stock=stock;
-    it.avg=cost;
-    it.stockValue=stock*cost;
-  } else {
-    state.items.push({
-      id: rnd(),
-      name,
-      stock,
-      avg: cost,
-      stockValue: stock*cost,
-      sales: 0,
-      profit: 0
-    });
-  }
+  state.items.push({
+    id: rnd(),
+    name,
+    stock,
+    avg: cost,
+    stockValue: stock*cost,
+    sales: 0,
+    profit: 0
+  });
 
   saveState();
   closeModal();
@@ -203,6 +194,7 @@ function render(){
         <td>
           <button class="btn-light" onclick="masuk('${it.id}')">Masuk</button>
           <button class="btn" onclick="keluar('${it.id}')">Terjual</button>
+          <button class="btn-light" onclick="hapusKomoditas('${it.id}')">Hapus</button>
         </td>
       </tr>
     `;
@@ -213,10 +205,9 @@ function masuk(id){
   const it = state.items.find(x=>x.id==id);
   let qty = Number(prompt("Qty barang masuk:",1));
   if(!qty||qty<=0)return;
-  let cost = Number(prompt("Harga modal per unit:", it.avg));
+  let cost = Number(prompt("Harga modal per kantong:", it.avg));
   if(!cost||cost<0)return;
 
-  // average cost system
   it.stock += qty;
   it.stockValue += qty*cost;
   it.avg = Math.round(it.stockValue / it.stock);
@@ -246,7 +237,7 @@ function keluar(id){
   if(!qty||qty<=0)return;
   if(qty>it.stock){alert("Qty melebihi stok.");return;}
 
-  let sell = Number(prompt("Harga jual per unit:"));
+  let sell = Number(prompt("Harga jual per kantong:"));
   if(!sell||sell<0)return;
 
   const avg = it.avg;
@@ -276,6 +267,19 @@ function keluar(id){
   saveState();
   render();
   renderLogs();
+}
+
+/* ===== HAPUS KOMODITAS =====
+   Versi ini menghapus komoditas SAJA, riwayat tetap ada.
+   Kalau mau riwayat ikut terhapus, bilang ya nanti aku ubah. */
+function hapusKomoditas(id){
+  const it = state.items.find(x=>x.id===id);
+  if(!it) return;
+  if(!confirm(`Hapus komoditas "${it.name}"?`)) return;
+
+  state.items = state.items.filter(x=>x.id !== id);
+  saveState();
+  render();
 }
 
 function exportLogs(){
