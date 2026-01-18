@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aplikasi Stok & Penjualan (Average Cost)</title>
+<style>
+body{margin:0;font-family:system-ui;background:#f5f5f7;color:#111}
+.container{max-width:1100px;margin:auto;padding:20px}
+h1{margin:0 0 10px;font-size:24px}
+.section{background:#fff;border-radius:12px;padding:16px;margin-top:16px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+label{font-size:13px}
+input,select{padding:8px;border-radius:8px;border:1px solid #ccc;width:100%}
+button{padding:8px 12px;border-radius:8px;border:0;cursor:pointer;font-weight:bold}
+.btn{background:#111;color:#fff}
+.btn-light{background:#eee}
+table{width:100%;border-collapse:collapse;margin-top:10px;font-size:14px}
+th,td{padding:8px;border-bottom:1px solid #ddd;text-align:left;white-space:nowrap}
+th{background:#fafafa}
+.badge-profit{color:#0a7e32;font-weight:bold}
+.badge-loss{color:#c10f0f;font-weight:bold}
+.flex{display:flex;gap:12px;flex-wrap:wrap}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center}
+.modal{background:#fff;padding:20px;border-radius:12px;max-width:400px;width:100%}
+</style>
+</head>
+<body>
+
+<div class="container">
+<h1>Stok & Penjualan • Average Cost + Riwayat + Laporan Mingguan</h1>
+
+<!-- Input Pencarian -->
+<div class="section">
+  <div class="flex">
+    <div style="flex:1">
+      <label>Cari Komoditas</label>
+      <input id="search">
+    </div>
+    <div style="width:140px">
+      <label>Satuan</label>
+      <select id="unit">
+        <option value="unit">unit</option>
+        <option value="kg">kg</option>
+        <option value="ikat">ikat</option>
+        <option value="kantong">kantong</option>
+      </select>
+    </div>
+    <div>
+      <label style="opacity:0">.</label>
+      <button class="btn" onclick="openAdd()">Tambah</button>
+    </div>
+    <div>
+      <label style="opacity:0">.</label>
+      <button class="btn-light" onclick="exportLogs()">Export CSV</button>
+    </div>
+  </div>
+</div>
+
+<!-- TABEL STOK -->
+<div class="section">
+  <h3>Data Stok</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>No</th>
+        <th>Nama</th>
+        <th>Stok</th>
+        <th>Harga Modal Rata2</th>
+        <th>Nilai Modal Stok</th>
+        <th>Uang Masuk</th>
+        <th>Profit Real</th>
+        <th>Aksi</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<!-- RIWAYAT -->
+<div class="section">
+  <h3>Riwayat Transaksi</h3>
+  <label>Pilih tanggal</label>
+  <input type="date" id="logDate" onchange="renderLogs()">
+
+  <table>
+    <thead>
+      <tr>
+        <th>Tanggal</th>
+        <th>Tipe</th>
+        <th>Barang</th>
+        <th>Qty</th>
+        <th>Harga</th>
+        <th>Total</th>
+        <th>Profit</th>
+      </tr>
+    </thead>
+    <tbody id="tbodyLog"></tbody>
+  </table>
+</div>
+
+<!-- LAPORAN MINGGUAN -->
+<div class="section">
+  <h3>Laporan Mingguan</h3>
+
+  <button class="btn-light" onclick="renderWeekly()">Generate Laporan</button>
+
+  <table>
+    <tbody id="weekly"></tbody>
+  </table>
+</div>
+
+<!-- MODAL -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3 id="modalTitle">Tambah</h3>
+
+    <label>Nama Barang</label>
+    <input id="mName">
+
+    <label>Stok Awal</label>
+    <input id="mStock" type="number" min="0">
+
+    <label>Modal Rata-rata (Rp)</label>
+    <input id="mCost" type="number" min="0">
+
+    <div class="flex" style="margin-top:12px">
+      <button class="btn-light" onclick="closeModal()">Batal</button>
+      <button class="btn" onclick="saveItem()">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let state = JSON.parse(localStorage.getItem("STATE_V3") || `{
+  "items":[],
+  "logs":[]
+}`);
+
+function saveState(){localStorage.setItem("STATE_V3", JSON.stringify(state));}
+
+function rnd(){return Math.random().toString(36).slice(2);}
+
+function openModal(){modalBg.style.display="flex";}
+function closeModal(){modalBg.style.display="none";}
+
+let editing = null;
+
+function openAdd(){
+  editing = null;
+  modalTitle.textContent = "Tambah Komoditas";
+  mName.value = "";
+  mStock.value = 0;
+  mCost.value = 0;
+  openModal();
+}
+
+function saveItem(){
+  const name = mName.value.trim();
+  const stock = Number(mStock.value);
+  const cost = Number(mCost.value);
+
+  if(!name){alert("Nama wajib.");return;}
+
+  if(editing){
+    let it = state.items.find(x=>x.id==editing);
+    it.name=name;
+    it.stock=stock;
+    it.avg=cost;
+    it.stockValue=stock*cost;
+  } else {
+    state.items.push({
+      id: rnd(),
+      name,
+      stock,
+      avg: cost,
+      stockValue: stock*cost,
+      sales: 0,
+      profit: 0
+    });
+  }
+
+  saveState();
+  closeModal();
+  render();
+}
+
+// TABEL
+function render(){
+  const q = search.value.toLowerCase();
+  const unit = document.getElementById("unit").value;
+  const out = state.items.filter(a=>a.name.toLowerCase().includes(q));
+
+  tbody.innerHTML = out.map((it,i)=>{
+    return `
+      <tr>
+        <td>${i+1}</td>
+        <td>${it.name}</td>
+        <td>${it.stock} ${unit}</td>
+        <td>Rp ${it.avg.toLocaleString()}</td>
+        <td>Rp ${it.stockValue.toLocaleString()}</td>
+        <td>Rp ${it.sales.toLocaleString()}</td>
+        <td><span class="${it.profit>=0?'badge-profit':'badge-loss'}">Rp ${it.profit.toLocaleString()}</span></td>
+        <td>
+          <button class="btn-light" onclick="masuk('${it.id}')">Masuk</button>
+          <button class="btn" onclick="keluar('${it.id}')">Terjual</button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function masuk(id){
+  const it = state.items.find(x=>x.id==id);
+  let qty = Number(prompt("Qty barang masuk:",1));
+  if(!qty||qty<=0)return;
+  let cost = Number(prompt("Harga modal per unit:", it.avg));
+  if(!cost||cost<0)return;
+
+  // average cost system
+  it.stock += qty;
+  it.stockValue += qty*cost;
+  it.avg = Math.round(it.stockValue / it.stock);
+
+  state.logs.push({
+    id:rnd(),
+    date:new Date().toISOString().slice(0,10),
+    type:"IN",
+    name:it.name,
+    item:id,
+    qty,
+    price:cost,
+    total:qty*cost,
+    profit:0
+  });
+
+  saveState();
+  render();
+  renderLogs();
+}
+
+function keluar(id){
+  const it = state.items.find(x=>x.id==id);
+  if(it.stock<=0){alert("Stok habis.");return;}
+
+  let qty = Number(prompt("Qty terjual:",1));
+  if(!qty||qty<=0)return;
+  if(qty>it.stock){alert("Qty melebihi stok.");return;}
+
+  let sell = Number(prompt("Harga jual per unit:"));
+  if(!sell||sell<0)return;
+
+  const avg = it.avg;
+  const revenue = qty*sell;
+  const cost = qty*avg;
+  const profit = revenue - cost;
+
+  it.sales += revenue;
+  it.profit += profit;
+
+  it.stock -= qty;
+  it.stockValue -= cost;
+  if(it.stock>0){it.avg=Math.round(it.stockValue/it.stock);}else{it.avg=0;it.stockValue=0;}
+
+  state.logs.push({
+    id:rnd(),
+    date:new Date().toISOString().slice(0,10),
+    type:"OUT",
+    name:it.name,
+    item:id,
+    qty,
+    price:sell,
+    total:revenue,
+    profit
+  });
+
+  saveState();
+  render();
+  renderLogs();
+}
+
+function exportLogs(){
+  let rows=["date,type,name,qty,price,total,profit"];
+  state.logs.forEach(l=>{
+    rows.push(`${l.date},${l.type},${l.name},${l.qty},${l.price},${l.total},${l.profit}`);
+  });
+  let csv=rows.join("\n");
+  let a=document.createElement("a");
+  a.href="data:text/csv;charset=utf-8,"+encodeURI(csv);
+  a.download="riwayat.csv";
+  a.click();
+}
+
+function renderLogs(){
+  const d = logDate.value;
+  const out = state.logs.filter(l=>!d || l.date==d);
+  tbodyLog.innerHTML = out.map(l=>{
+    return `
+      <tr>
+        <td>${l.date}</td>
+        <td>${l.type}</td>
+        <td>${l.name}</td>
+        <td>${l.qty}</td>
+        <td>Rp ${l.price.toLocaleString()}</td>
+        <td>Rp ${l.total.toLocaleString()}</td>
+        <td>${l.type=="OUT" ? ("Rp "+l.profit.toLocaleString()) : "-"}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function renderWeekly(){
+  function weekRange(){
+    let today=new Date();
+    let day=today.getDay();
+    let diff=today.getDate()-day+1;
+    let start=new Date(today.setDate(diff));
+    let end=new Date(start); end.setDate(end.getDate()+6);
+    return [start.toISOString().slice(0,10),end.toISOString().slice(0,10)];
+  }
+  let [s,e]=weekRange();
+  let logs=state.logs.filter(l=>l.date>=s && l.date<=e);
+
+  let totalMasuk=0,totalJual=0,totalProfit=0;
+  let mapSold={};
+
+  logs.forEach(l=>{
+    if(l.type=="IN") totalMasuk+=l.total;
+    if(l.type=="OUT"){
+      totalJual+=l.total;
+      totalProfit+=l.profit;
+      mapSold[l.name]=(mapSold[l.name]||0)+l.qty;
+    }
+  });
+
+  let top = Object.entries(mapSold).sort((a,b)=>b[1]-a[1])[0];
+
+  weekly.innerHTML = `
+    <tr><td>Total Modal Masuk:</td><td>Rp ${totalMasuk.toLocaleString()}</td></tr>
+    <tr><td>Total Uang Masuk:</td><td>Rp ${totalJual.toLocaleString()}</td></tr>
+    <tr><td>Total Profit Real:</td><td>Rp ${totalProfit.toLocaleString()}</td></tr>
+    <tr><td>Barang Terlaris:</td><td>${top?top[0]+" ("+top[1]+")":"-"}</td></tr>
+    <tr><td>Rentang Minggu:</td><td>${s} s/d ${e}</td></tr>
+  `;
+}
+
+render();
+</script>
+
+</div>
+</body>
+</html>
